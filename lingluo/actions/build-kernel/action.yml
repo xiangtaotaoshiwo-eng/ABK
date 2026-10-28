@@ -876,7 +876,7 @@ runs:
 
     - name: Restore ccache cache
       id: restore-ccache-cache
-      uses: ./action-source/.github/actions/cache/restore
+      uses: ./lingluo/actions/cache/restore
       if: ${{ inputs.clean == false || inputs.clean == 'false' }}
       with:
         cache_path: ${{ env.CCACHE_DIR }}
@@ -3169,7 +3169,7 @@ runs:
     - name: Save ccache cache
       if: always() && steps.build_kernel_step.conclusion == 'success'
       continue-on-error: true
-      uses: ./action-source/.github/actions/cache/save
+      uses: ./lingluo/actions/cache/save
       with:
         cache_path: ${{ env.CCACHE_DIR }}
         cache_key: ${{ inputs.ksu_type }}-v3-${{ env.MODEL_FLAT }}-${{ env.OP_OS_VERSION }}-${{ env.KERNEL_FULL_VER }}-${{ env.CLANG_VERSION_SHORT }}
