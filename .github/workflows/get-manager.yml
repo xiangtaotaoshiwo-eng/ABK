@@ -331,95 +331,76 @@ jobs:
           set -euo pipefail
           apk="$(find manager-artifacts -type f -name '*.apk' | head -n1)"
           [ -n "$apk" ] || { echo "::error::未找到管理器 APK"; exit 1; }
-          rm -rf /tmp/abk_cert && mkdir -p /tmp/abk_cert
-          unzip -o -q "$apk" 'META-INF/*.RSA' -d /tmp/abk_cert || unzip -o -q "$apk" 'META-INF/*.EC' -d /tmp/abk_cert
-          rsa="$(find /tmp/abk_cert -type f \( -name '*.RSA' -o -name '*.EC' \) | head -n1)"
-          [ -n "$rsa" ] || { echo "::error::管理器 APK 里没有 v1 签名证书"; exit 1; }
-          openssl pkcs7 -inform DER -in "$rsa" -print_certs -out /tmp/abk_cert/cert.pem
-          openssl x509 -in /tmp/abk_cert/cert.pem -outform DER -out /tmp/abk_cert/cert.der
-          size="$(stat -c%s /tmp/abk_cert/cert.der)"
-          sha="$(openssl dgst -sha256 -r /tmp/abk_cert/cert.der | awk '{print $1}')"
+          # FinaSU / KernelSU-Next 的 manager 只有 v2/v3 签名(无 v1 JAR 签名),
+          # 直接解析 APK Signing Block 取第一张证书 DER。
+          python3 - "$apk" <<'PYEOF'
+          import struct, sys, hashlib
+          apk = sys.argv[1]
+          d = open(apk, 'rb').read()
+          magic = b'APK Sig Block 42'
+          pos = d.rfind(magic)
+          if pos < 0:
+              sys.exit('no APK Signing Block (v2/v3)')
+          size2 = struct.unpack('<Q', d[pos-8:pos])[0]
+          block_start = pos + 16 - size2 - 8
+          size1 = struct.unpack('<Q', d[block_start:block_start+8])[0]
+          pairs = d[block_start+8:block_start+size1-8]
+          def rd(buf, off):
+              n = struct.unpack('<I', buf[off:off+4])[0]
+              return buf[off+4:off+4+n], off+4+n
+          found = None
+          i = 0
+          while i + 12 <= len(pairs):
+              ln = struct.unpack('<Q', pairs[i:i+8])[0]
+              pid = struct.unpack('<I', pairs[i+8:i+12])[0]
+              val = pairs[i+12:i+8+ln]
+              if pid in (0x7109871a, 0xf05368c0, 0x1b93ad61):
+                  found = val
+                  break
+              i += 8 + ln
+          if not found:
+              sys.exit('no v2/v3 signer block')
+          signers, _ = rd(found, 0)
+          signer, _ = rd(signers, 0)
+          signed_data, _ = rd(signer, 0)
+          _digests, off = rd(signed_data, 0)
+          certs, _ = rd(signed_data, off)
+          cert, _ = rd(certs, 0)
+          print(len(cert), hashlib.sha256(cert).hexdigest())
+          PYEOF
+          read -r size sha < <(python3 - "$apk" <<'PYEOF'
+          import struct, sys, hashlib
+          apk = sys.argv[1]
+          d = open(apk, 'rb').read()
+          pos = d.rfind(b'APK Sig Block 42')
+          size2 = struct.unpack('<Q', d[pos-8:pos])[0]
+          bs = pos + 16 - size2 - 8
+          size1 = struct.unpack('<Q', d[bs:bs+8])[0]
+          pairs = d[bs+8:bs+size1-8]
+          def rd(buf, off):
+              n = struct.unpack('<I', buf[off:off+4])[0]
+              return buf[off+4:off+4+n], off+4+n
+          found = None
+          i = 0
+          while i + 12 <= len(pairs):
+              ln = struct.unpack('<Q', pairs[i:i+8])[0]
+              pid = struct.unpack('<I', pairs[i+8:i+12])[0]
+              if pid in (0x7109871a, 0xf05368c0, 0x1b93ad61):
+                  found = pairs[i+12:i+8+ln]
+                  break
+              i += 8 + ln
+          if not found:
+              sys.exit('no v2/v3 signer block')
+          signers, _ = rd(found, 0)
+          signer, _ = rd(signers, 0)
+          sd, _ = rd(signer, 0)
+          _dg, off2 = rd(sd, 0)
+          certs, _ = rd(sd, off2)
+          cert, _ = rd(certs, 0)
+          print(len(cert), hashlib.sha256(cert).hexdigest())
+          PYEOF
+          )
+          [ -n "${size:-}" ] || { echo "::error::证书提取失败"; exit 1; }
           echo "管理器签名证书: size=$size sha256=$sha"
           echo "certSize=$size" >> "$GITHUB_OUTPUT"
           echo "certSha=$sha" >> "$GITHUB_OUTPUT"
-
-  upload_other_modules:
-    if: ${{ inputs.use_ntsync || inputs.use_networking }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      
-      - name: 合并启用功能的模块
-        run: |
-          echo "=== 开始合并扩展模块 ==="
-          ls -la modules/ || echo "modules 目录不存在"
-
-          ENABLE_FEATURES=()
-          if [ "${{ inputs.use_networking }}" = "true" ]; then
-            ENABLE_FEATURES+=("ipset")
-          fi
-          if [ "${{ inputs.use_ntsync }}" = "true" ]; then
-            ENABLE_FEATURES+=("ntsync")
-          fi
-          
-          echo "当前启用功能: ${ENABLE_FEATURES[*]}"
-
-          PROP="modules/main/module.prop"      
-          cat > "$PROP" << EOF
-          id=abk_extension
-          name=ABK-Extension
-          version=1.2.0
-          versionCode=10020
-          EOF
-
-          AUTHORS=""
-          DESC=""
-          for feature in "${ENABLE_FEATURES[@]}"; do
-            if [ -f "modules/$feature/module.prop" ]; then
-              A=$(grep '^author=' "modules/$feature/module.prop" | cut -d'=' -f2- | sed 's/^[[:space:]]*//')
-              D=$(grep '^description=' "modules/$feature/module.prop" | cut -d'=' -f2- | sed 's/^[[:space:]]*//')
-              [ -n "$A" ] && AUTHORS="${AUTHORS}${A}, "
-              [ -n "$D" ] && DESC="${DESC}${D}; "
-            fi
-          done
-          
-          [ -n "$AUTHORS" ] && echo "author=${AUTHORS%, }" >> "$PROP"
-          [ -n "$DESC" ]    && echo "description=${DESC%; }" >> "$PROP"
-          
-          echo "module.prop 合并完成"
-
-          for feature in "${ENABLE_FEATURES[@]}"; do
-            [ -d "modules/$feature" ] || continue
-            echo "正在合并模块: $feature"
-            
-            find "modules/$feature" -type f ! -name "module.prop" | while read -r src; do
-              rel="${src#modules/$feature/}"
-              dst="modules/main/$rel"
-              
-              mkdir -p "$(dirname "$dst")"
-              
-              if [ ! -f "$dst" ]; then
-                cp -a "$src" "$dst"
-                echo "  复制: $feature/$rel"
-              else
-                echo "  追加: $feature/$rel"
-                echo "" >> "$dst"
-                echo "# ========== 来自 $feature ==========" >> "$dst"
-                cat "$src" >> "$dst"
-              fi
-            done
-          done
-
-          echo "=== 合并完成 ==="
-          echo "最终 modules/main 内容："
-          ls -R modules/main/
-
-      - name: 上传扩展模块
-        uses: actions/upload-artifact@v6
-        with:
-          name: abk_extension
-          path: modules/main/*
-          if-no-files-found: error
