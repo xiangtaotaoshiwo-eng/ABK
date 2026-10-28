@@ -259,6 +259,8 @@ ksu_variant_repo() {
     # GKI builds use main; builtin is for OnePlus only (oneplus-build.yml, not resolve-ksu-ref).
     SukiSU) printf '%s\n' "$SUKISU_REPO" ;;
     BakaSU) printf '%s\n' "Baka-SU/BakaSU" ;;
+    FinaSU) printf '%s\n' "LyraVoid/FinaSU" ;;
+    "KernelSU Next") printf '%s\n' "KernelSU-Next/KernelSU-Next" ;;
     *) return 1 ;;
   esac
 }
@@ -356,6 +358,16 @@ case "$KSU_VARIANT" in
   BakaSU)
     BRANCH="${BAKASU_REF}"
     RESOLVED_KSU_REPO="${RESOLVED_KSU_REPO:-Baka-SU/BakaSU}"
+    ;;
+  FinaSU)
+    # 无 pinned ref: 直接取上游默认分支 HEAD (master)
+    BRANCH="$(git ls-remote https://github.com/LyraVoid/FinaSU.git HEAD 2>/dev/null | awk '{print $1}' | head -n1)"
+    RESOLVED_KSU_REPO="${RESOLVED_KSU_REPO:-LyraVoid/FinaSU}"
+    ;;
+  "KernelSU Next")
+    # 上游默认分支是 dev (main 不存在)
+    BRANCH="$(git ls-remote https://github.com/KernelSU-Next/KernelSU-Next.git dev 2>/dev/null | awk '{print $1}' | head -n1)"
+    RESOLVED_KSU_REPO="${RESOLVED_KSU_REPO:-KernelSU-Next/KernelSU-Next}"
     ;;
   *)
     echo "::error::Unknown KSU variant: ${KSU_VARIANT}" >&2
