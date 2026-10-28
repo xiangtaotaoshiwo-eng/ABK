@@ -1659,7 +1659,9 @@ object RootUtils {
 
     val ABK_LKM_VARIANTS = listOf(
         AbkLkmVariant("kernelsu", "KernelSU"),
+        AbkLkmVariant("kernelsu_next", "KernelSU Next"),
         AbkLkmVariant("sukisu", "SukiSU"),
+        AbkLkmVariant("finasu", "FinaSU"),
         AbkLkmVariant("bakasu", "BakaSU")
     )
 
@@ -2623,6 +2625,8 @@ object RootUtils {
     private fun inferManagerVariant(version: String): String {
         val lower = version.lowercase()
         return when {
+            "fina" in lower -> "FinaSU"
+            "ksunext" in lower || "kernelsu next" in lower || "kernelsu-next" in lower -> "KernelSU Next"
             "bakasu" in lower -> "BakaSU"
             "sukisu" in lower -> "SukiSU"
             "kernelsu" in lower || version.isNotBlank() -> "KernelSU"

@@ -38,6 +38,8 @@ on:
         type: choice
         options:
           - SukiSU
+          - KernelSU Next
+          - FinaSU
           - BakaSU
           - Official
         default: BakaSU
@@ -373,6 +375,8 @@ jobs:
             "Official")  KSU_NAME="KernelSU" ;;
             "SukiSU")    KSU_NAME="SukiSU" ;;
             "BakaSU")  KSU_NAME="BakaSU" ;;
+            "KernelSU Next") KSU_NAME="KernelSU Next" ;;
+            "FinaSU")  KSU_NAME="FinaSU" ;;
           esac
           echo "KSU_NAME=$KSU_NAME" >> $GITHUB_ENV
 
@@ -392,7 +396,7 @@ jobs:
           fi
 
           # Hook 类型
-          if [ "${{ inputs.kernelsu_variant }}" = "SukiSU" ] || [ "${{ inputs.kernelsu_variant }}" = "BakaSU" ]; then
+          if [ "${{ inputs.kernelsu_variant }}" = "SukiSU" ] || [ "${{ inputs.kernelsu_variant }}" = "BakaSU" ] || [ "${{ inputs.kernelsu_variant }}" = "FinaSU" ] || [ "${{ inputs.kernelsu_variant }}" = "KernelSU Next" ]; then
             echo "HOOK_TYPE=SUSFS Inline Hooks" >> $GITHUB_ENV
           else
             echo "HOOK_TYPE=KPROBE Hooks" >> $GITHUB_ENV
@@ -441,11 +445,13 @@ jobs:
       # ==================== 确定 KSU 分支 ====================
       # 根据用户选择确定实际的 Git 分支
       - name: 确定 KSU 分支
-        if: inputs.kernelsu_branch == 'Dev(开发)' || inputs.kernelsu_variant == 'SukiSU' || inputs.kernelsu_variant == 'BakaSU'
+        if: inputs.kernelsu_branch == 'Dev(开发)' || inputs.kernelsu_variant == 'SukiSU' || inputs.kernelsu_variant == 'BakaSU' || inputs.kernelsu_variant == 'FinaSU' || inputs.kernelsu_variant == 'KernelSU Next'
         run: |
           case "${{ inputs.kernelsu_variant }}" in
             "Official") BRANCH="main" ;;
             "SukiSU"|"BakaSU") BRANCH="main" ;;
+            "KernelSU Next") BRANCH="dev" ;;
+            "FinaSU") BRANCH="master" ;;
             *) echo "错误: 未知变体" >&2; exit 1 ;;
           esac
           echo "KSU_BRANCH=$BRANCH" >> $GITHUB_ENV
@@ -458,6 +464,8 @@ jobs:
             "Official") REPO_URL="https://github.com/tiann/KernelSU.git"; REPO_URL2="tiann/KernelSU" ;;
             "SukiSU") REPO_URL="https://github.com/SukiSU-Ultra/SukiSU-Ultra.git"; REPO_URL2="SukiSU-Ultra/SukiSU-Ultra" ;;
             "BakaSU") REPO_URL="https://github.com/Baka-SU/BakaSU.git"; REPO_URL2="Baka-SU/BakaSU" ;;
+            "KernelSU Next") REPO_URL="https://github.com/KernelSU-Next/KernelSU-Next.git"; REPO_URL2="KernelSU-Next/KernelSU-Next" ;;
+            "FinaSU") REPO_URL="https://github.com/LyraVoid/FinaSU.git"; REPO_URL2="LyraVoid/FinaSU" ;;
           esac
 
           branch_input="${{ inputs.kernelsu_branch }}"
@@ -495,6 +503,7 @@ jobs:
             "Official") KSU_REF="$OFFICIAL_REF"; KSU_URL="https://github.com/$REPO_URL2/commit/$KSU_REF" ;;
             "SukiSU") KSU_REF="$SUKISU_REF"; KSU_URL="https://github.com/$REPO_URL2/commit/$KSU_REF" ;;
             "BakaSU") KSU_REF="$BAKASU_REF"; KSU_URL="https://github.com/$REPO_URL2/commit/$KSU_REF" ;;
+            "KernelSU Next"|"FinaSU") KSU_REF="$(git ls-remote "$REPO_URL" HEAD 2>/dev/null | awk '{print $1}' | head -n1)"; KSU_URL="https://github.com/$REPO_URL2/commit/$KSU_REF" ;;
             *) echo "错误: 未知变体" >&2; exit 1 ;;
           esac
 

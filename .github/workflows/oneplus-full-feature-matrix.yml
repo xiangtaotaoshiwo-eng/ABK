@@ -14,6 +14,8 @@ on:
         options:
           - Official
           - SukiSU
+          - KernelSU Next
+          - FinaSU
           - BakaSU
           - None
         default: SukiSU

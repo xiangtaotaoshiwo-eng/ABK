@@ -55,6 +55,8 @@ on:
           - None
           - Official
           - SukiSU
+          - KernelSU Next
+          - FinaSU
           - BakaSU
         default: BakaSU
       kernelsu_branch:

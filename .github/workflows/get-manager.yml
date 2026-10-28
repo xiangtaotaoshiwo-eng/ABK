@@ -25,6 +25,14 @@ on:
         description: "The calculated KSU version number"
         value: ${{ jobs.get_ksu_manager.outputs.ksuVer }}
 
+      managerCertSize:
+        description: "Manager signing certificate DER size (FinaSU / KernelSU Next)"
+        value: ${{ jobs.get_ksu_manager.outputs.managerCertSize }}
+
+      managerCertSha256:
+        description: "Manager signing certificate SHA-256 (FinaSU / KernelSU Next)"
+        value: ${{ jobs.get_ksu_manager.outputs.managerCertSha256 }}
+
 jobs:
   get_ksu_manager:
     if: inputs.kernelsu_variant != 'None'
@@ -32,6 +40,8 @@ jobs:
     outputs:
       # 输出1: KSU版本号
       ksuVer: ${{ steps.get_version.outputs.kversion }}
+      managerCertSize: ${{ steps.manager_cert.outputs.certSize }}
+      managerCertSha256: ${{ steps.manager_cert.outputs.certSha }}
       # 输出2: SUSFS版本号
       susVer: ${{ steps.get_version.outputs.sversion }}
     env:
@@ -98,6 +108,12 @@ jobs:
           elif [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
             echo "This is the Official"
             git clone https://github.com/tiann/KernelSU.git KernelSU
+          elif [ "${{ inputs.kernelsu_variant }}" == "KernelSU Next" ]; then
+            echo "This is the KernelSU Next variant"
+            git clone https://github.com/KernelSU-Next/KernelSU-Next.git KernelSU
+          elif [ "${{ inputs.kernelsu_variant }}" == "FinaSU" ]; then
+            echo "This is the FinaSU variant"
+            git clone https://github.com/LyraVoid/FinaSU.git KernelSU
           else
             echo "Unknown variant"
             exit 1
@@ -117,6 +133,13 @@ jobs:
           elif [ "${{ inputs.kernelsu_variant }}" == "BakaSU" ]; then
             KSU_VERSION=$((30700 + KSU_GIT_VERSION))
           elif [ "${{ inputs.kernelsu_variant }}" == "Official" ]; then
+            KSU_VERSION=$((30000 + KSU_GIT_VERSION))
+          elif [ "${{ inputs.kernelsu_variant }}" == "FinaSU" ]; then
+            # FinaSU kernel/Kbuild: KSU_VERSION = 30000 + git rev-list --count HEAD
+            KSU_VERSION=$((30000 + KSU_GIT_VERSION))
+          elif [ "${{ inputs.kernelsu_variant }}" == "KernelSU Next" ]; then
+            # KernelSU-Next follows the upstream 30000 + commit-count scheme.
+            # If upstream changes the offset, adjust here (and the manager versionCode must match).
             KSU_VERSION=$((30000 + KSU_GIT_VERSION))
           fi
           echo $KSU_VERSION
@@ -214,6 +237,21 @@ jobs:
             "BakaSU")
               # BakaSU has no release APKs; Actions build-manager (fallback to main latest in script).
               download_manager_for_repo "Baka-SU/BakaSU" "BakaSU"
+              ;;
+            "FinaSU")
+              if [[ "$BRANCH" =~ ^[Vv]?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                download_tag_release_apk "LyraVoid/FinaSU" "$BRANCH" "FinaSU"
+              else
+                download_manager_for_repo "LyraVoid/FinaSU" "FinaSU"
+              fi
+              ;;
+            "KernelSU Next")
+              # variant dir must stay space-free: manager-artifacts/${variant}
+              if [[ "$BRANCH" =~ ^[Vv]?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                download_tag_release_apk "KernelSU-Next/KernelSU-Next" "$BRANCH" "KernelSUNext"
+              else
+                download_manager_for_repo "KernelSU-Next/KernelSU-Next" "KernelSUNext"
+              fi
               ;;
             *)
               echo "::error::未知 KernelSU 变体: ${{ inputs.kernelsu_variant }}"
@@ -366,3 +404,22 @@ jobs:
           name: abk_extension
           path: modules/main/*
           if-no-files-found: error
+
+      - name: 提取管理器签名证书 (FinaSU / KernelSU Next)
+        id: manager_cert
+        if: inputs.kernelsu_variant == 'FinaSU' || inputs.kernelsu_variant == 'KernelSU Next'
+        run: |
+          set -euo pipefail
+          apk="$(find manager-artifacts -type f -name '*.apk' | head -n1)"
+          [ -n "$apk" ] || { echo "::error::未找到管理器 APK"; exit 1; }
+          rm -rf /tmp/abk_cert && mkdir -p /tmp/abk_cert
+          unzip -o -q "$apk" 'META-INF/*.RSA' -d /tmp/abk_cert || unzip -o -q "$apk" 'META-INF/*.EC' -d /tmp/abk_cert
+          rsa="$(find /tmp/abk_cert -type f \( -name '*.RSA' -o -name '*.EC' \) | head -n1)"
+          [ -n "$rsa" ] || { echo "::error::管理器 APK 里没有 v1 签名证书"; exit 1; }
+          openssl pkcs7 -inform DER -in "$rsa" -print_certs -out /tmp/abk_cert/cert.pem
+          openssl x509 -in /tmp/abk_cert/cert.pem -outform DER -out /tmp/abk_cert/cert.der
+          size="$(stat -c%s /tmp/abk_cert/cert.der)"
+          sha="$(openssl dgst -sha256 -r /tmp/abk_cert/cert.der | awk '{print $1}')"
+          echo "管理器签名证书: size=$size sha256=$sha"
+          echo "certSize=$size" >> "$GITHUB_OUTPUT"
+          echo "certSha=$sha" >> "$GITHUB_OUTPUT"

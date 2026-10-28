@@ -4403,6 +4403,16 @@ class MainViewModel @JvmOverloads constructor(
                         title = "BakaSU",
                         items = buildBakaSuSettings()
                     )
+                    manager.isFinaSu() -> ManagerSettingsLoad(
+                        backend = "finasu",
+                        title = "FinaSU",
+                        items = buildOfficialKernelSuSettings()
+                    )
+                    manager.isKernelSuNext() -> ManagerSettingsLoad(
+                        backend = "kernelsu_next",
+                        title = "KernelSU Next",
+                        items = buildOfficialKernelSuSettings()
+                    )
                     manager.isSukiSu() -> ManagerSettingsLoad(
                         backend = "sukisu",
                         title = "SukiSU",
@@ -4741,6 +4751,16 @@ class MainViewModel @JvmOverloads constructor(
                 )
             }
         }
+    }
+
+    private fun RootUtils.ManagerRuntimeProbe.isKernelSuNext(): Boolean {
+        val text = listOf(displayName, variant, version).joinToString(" ").lowercase()
+        return "ksunext" in text || "kernelsu next" in text || "kernelsu-next" in text
+    }
+
+    private fun RootUtils.ManagerRuntimeProbe.isFinaSu(): Boolean {
+        val text = listOf(displayName, variant, version).joinToString(" ").lowercase()
+        return "fina" in text
     }
 
     private fun RootUtils.ManagerRuntimeProbe.isBakaSu(): Boolean {

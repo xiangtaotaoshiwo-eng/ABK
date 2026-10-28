@@ -1424,6 +1424,30 @@ jobs:
               fi
               cd ..
               ;;
+            "FinaSU")
+              echo "添加 FinaSU..."
+              requested_ref="$BRANCH"
+              setup_script="$(mktemp)"
+              curl -fLSs "https://raw.githubusercontent.com/LyraVoid/FinaSU/master/kernel/setup.sh" -o "$setup_script"
+              bash "$setup_script" "$requested_ref"
+              rm -f "$setup_script"
+              if [ ! -d KernelSU/.git ]; then
+                echo "::error::FinaSU setup 完成后未找到 KernelSU Git 仓库"
+                exit 1
+              fi
+              ;;
+            "KernelSU Next")
+              echo "添加 KernelSU Next..."
+              requested_ref="$BRANCH"
+              setup_script="$(mktemp)"
+              curl -fLSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/dev/kernel/setup.sh" -o "$setup_script"
+              bash "$setup_script" "$requested_ref"
+              rm -f "$setup_script"
+              if [ ! -d KernelSU/.git ]; then
+                echo "::error::KernelSU Next setup 完成后未找到 KernelSU Git 仓库"
+                exit 1
+              fi
+              ;;
             "SukiSU")
               echo "添加 SukiSU..."
               requested_ref="$BRANCH"
@@ -2033,12 +2057,18 @@ jobs:
             "SukiSU")
               echo "SukiSU 使用单独步骤注入 SUSFS Kconfig 符号"
               ;;
+            "FinaSU")
+              echo "FinaSU 使用内置 SUSFS 支持 (kernel/extension/susfs.c)"
+              ;;
+            "KernelSU Next")
+              echo "KernelSU Next 使用 10_enable_susfs_for_ksu.patch 注入"
+              ;;
           esac
 
           cd $KERNEL_ROOT/common
           patch -p1 < "50_add_susfs_in_gki-${ABK_ANDROID_VERSION}-${ABK_KERNEL_VERSION}.patch" || true
 
-          if [ "$ABK_KSU_VARIANT" == "SukiSU" ] || [ "$ABK_KSU_VARIANT" == "BakaSU" ]; then
+          if [ "$ABK_KSU_VARIANT" == "SukiSU" ] || [ "$ABK_KSU_VARIANT" == "BakaSU" ] || [ "$ABK_KSU_VARIANT" == "FinaSU" ]; then
             SUSFS_C="./fs/susfs.c"
             if [ -f "$SUSFS_C" ] && grep -q '^static void susfs_run_sus_path_loop(' "$SUSFS_C"; then
               sed -i 's/^static void susfs_run_sus_path_loop(/void susfs_run_sus_path_loop(/' "$SUSFS_C"

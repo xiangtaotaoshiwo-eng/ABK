@@ -498,6 +498,9 @@ object KernelSupport {
             lower == KSU_VARIANT_OFFICIAL.lowercase() -> KSU_VARIANT_OFFICIAL
             lower == KSU_VARIANT_SUKISU.lowercase() -> KSU_VARIANT_SUKISU
             lower == KSU_VARIANT_BAKASU.lowercase() -> KSU_VARIANT_BAKASU
+            lower == KSU_VARIANT_KSU_NEXT.lowercase() ||
+                lower == "kernelsu-next" || lower == "ksunext" || lower == "kernelsunext" -> KSU_VARIANT_KSU_NEXT
+            lower == KSU_VARIANT_FINASU.lowercase() || lower == "fina" || lower == "fina-su" -> KSU_VARIANT_FINASU
             lower == KSU_VARIANT_NONE.lowercase() || lower == "无" -> KSU_VARIANT_NONE
             isLegacyAlias -> KSU_VARIANT_BAKASU
             else -> KSU_VARIANT_BAKASU

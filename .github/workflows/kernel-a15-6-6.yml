@@ -15,6 +15,8 @@ on:
           - None
           - Official
           - SukiSU
+          - KernelSU Next
+          - FinaSU
           - BakaSU
         default: BakaSU
       kernelsu_branch:
@@ -235,6 +237,7 @@ jobs:
             os_patch_level: "2026-04"
           - sub_level: "X"
             os_patch_level: "lts"
+    needs: get-ksu-manager
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
@@ -243,6 +246,8 @@ jobs:
       sub_level: ${{ matrix.sub_level }}
       os_patch_level: ${{ matrix.os_patch_level }}
       ksu_variant: ${{ inputs.kernelsu_variant }}
+      manager_cert_size: ${{ needs.get-ksu-manager.outputs.managerCertSize }}
+      manager_cert_sha256: ${{ needs.get-ksu-manager.outputs.managerCertSha256 }}
       ksu_branch: ${{ inputs.kernelsu_branch }}
       custom_ref: ${{ inputs.custom_ref || '' }}
       version: ${{ inputs.version || '' }}
