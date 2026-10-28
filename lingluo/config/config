@@ -1,0 +1,25 @@
+# ==================== 自定义提交配置 ====================
+# 本文件用于配置 SUSFS 仓库的自定义提交
+#
+# 使用说明:
+#   1. 将 custom 设为 true 启用自定义提交功能
+#   2. 在对应配置项后填入想要使用的 commit hash
+#   3. 留空表示使用该分支的最新提交
+#
+# 示例:
+#   gki-android14-6.1=abc123def456
+#
+# SUSFS 提交来源: https://gitlab.com/simonpunk/susfs4ksu
+#
+# ================================================================
+
+# 是否启用自定义提交 (true/false)
+custom=false
+
+# ==================== SUSFS 各分支的 commit hash ====================
+# 仅当 custom=true 时生效
+gki-android12-5.10=
+gki-android13-5.15=
+gki-android14-6.1=
+gki-android15-6.6=
+gki-android16-6.12=

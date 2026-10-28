@@ -1,0 +1,99 @@
+name: LingLuo17 构建通道 (OnePlus / GKI)
+
+# 单开一条通道: 完全使用 LingLuo17/OnePlus_KernelSU_SUSFS 的构建流水线
+# (源码同步 -> KSU/FinaSU 集成 + 管理器证书注入 -> SUSFS -> BBG/unicode/优化补丁 -> Image -> AnyKernel3)
+
+on:
+  workflow_dispatch:
+    inputs:
+      device_config:
+        description: '设备配置: 目录/文件名 (如 a16/OnePlus-Ace6T-6.12.38)'
+        required: true
+        default: 'a16/OnePlus-Ace6T-6.12.38'
+        type: string
+      ksu_type:
+        description: 'KSU 变体'
+        required: true
+        type: choice
+        default: FinaSU
+        options:
+          - FinaSU
+          - SukiSU
+          - BakaSU
+          - Official
+          - KernelSU Next
+      custom_version:
+        description: '自定义版本后缀 (留空=用 -androidXX-KMI)'
+        required: false
+        default: ''
+        type: string
+      optimize_level:
+        description: '优化等级'
+        required: false
+        type: choice
+        default: '1'
+        options: ['0', '1', '2', '3']
+      clean:
+        description: '干净构建(不用缓存)'
+        required: false
+        default: false
+        type: boolean
+      debug:
+        description: '输出调试日志'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 解析设备配置
+        id: prep
+        run: |
+          set -euo pipefail
+          cfg="lingluo/configs/${{ inputs.device_config }}.json"
+          if [ ! -f "$cfg" ]; then
+            echo "::error::找不到配置 $cfg"
+            find lingluo/configs -name '*.json' | head -20
+            exit 1
+          fi
+          jq '.' "$cfg"
+          av="$(jq -r '.android_version' "$cfg")"
+          kv="$(jq -r '.kernel_version' "$cfg")"
+          echo "CONFIG=${av}-${kv}" >> "$GITHUB_ENV"
+          echo "OP_CONFIG_PATH=$cfg" >> "$GITHUB_ENV"
+          echo "config_json=$(jq -c '.' "$cfg")" >> "$GITHUB_OUTPUT"
+
+      - name: 安装依赖
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq jq aria2 pigz rsync ccache zip unzip bc bison flex \
+            libssl-dev libelf-dev python3 zstd cpio >/dev/null
+
+      - name: 使用 LingLuo17 流水线构建
+        uses: ./lingluo/actions/build-kernel
+        with:
+          op_config_json: ${{ steps.prep.outputs.config_json }}
+          ksu_type: ${{ inputs.ksu_type }}
+          custom_version: ${{ inputs.custom_version }}
+          optimize_level: ${{ inputs.optimize_level }}
+          clean: ${{ inputs.clean }}
+          debug: ${{ inputs.debug }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 上传 AnyKernel3
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lingluo17-${{ inputs.ksu_type }}-${{ inputs.device_config }}
+          path: |
+            lingluo/**/artifacts/*.zip
+            lingluo/**/build-logs/*.log
+          if-no-files-found: warn
