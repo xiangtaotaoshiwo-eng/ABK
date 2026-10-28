@@ -324,6 +324,25 @@ jobs:
           name: susfs-${{ env.SUSFS_NAME }}
           path: ./susfs-module/*
       
+      - name: 提取管理器签名证书 (FinaSU / KernelSU Next)
+        id: manager_cert
+        if: inputs.kernelsu_variant == 'FinaSU' || inputs.kernelsu_variant == 'KernelSU Next'
+        run: |
+          set -euo pipefail
+          apk="$(find manager-artifacts -type f -name '*.apk' | head -n1)"
+          [ -n "$apk" ] || { echo "::error::未找到管理器 APK"; exit 1; }
+          rm -rf /tmp/abk_cert && mkdir -p /tmp/abk_cert
+          unzip -o -q "$apk" 'META-INF/*.RSA' -d /tmp/abk_cert || unzip -o -q "$apk" 'META-INF/*.EC' -d /tmp/abk_cert
+          rsa="$(find /tmp/abk_cert -type f \( -name '*.RSA' -o -name '*.EC' \) | head -n1)"
+          [ -n "$rsa" ] || { echo "::error::管理器 APK 里没有 v1 签名证书"; exit 1; }
+          openssl pkcs7 -inform DER -in "$rsa" -print_certs -out /tmp/abk_cert/cert.pem
+          openssl x509 -in /tmp/abk_cert/cert.pem -outform DER -out /tmp/abk_cert/cert.der
+          size="$(stat -c%s /tmp/abk_cert/cert.der)"
+          sha="$(openssl dgst -sha256 -r /tmp/abk_cert/cert.der | awk '{print $1}')"
+          echo "管理器签名证书: size=$size sha256=$sha"
+          echo "certSize=$size" >> "$GITHUB_OUTPUT"
+          echo "certSha=$sha" >> "$GITHUB_OUTPUT"
+
   upload_other_modules:
     if: ${{ inputs.use_ntsync || inputs.use_networking }}
     runs-on: ubuntu-latest
@@ -404,22 +423,3 @@ jobs:
           name: abk_extension
           path: modules/main/*
           if-no-files-found: error
-
-      - name: 提取管理器签名证书 (FinaSU / KernelSU Next)
-        id: manager_cert
-        if: inputs.kernelsu_variant == 'FinaSU' || inputs.kernelsu_variant == 'KernelSU Next'
-        run: |
-          set -euo pipefail
-          apk="$(find manager-artifacts -type f -name '*.apk' | head -n1)"
-          [ -n "$apk" ] || { echo "::error::未找到管理器 APK"; exit 1; }
-          rm -rf /tmp/abk_cert && mkdir -p /tmp/abk_cert
-          unzip -o -q "$apk" 'META-INF/*.RSA' -d /tmp/abk_cert || unzip -o -q "$apk" 'META-INF/*.EC' -d /tmp/abk_cert
-          rsa="$(find /tmp/abk_cert -type f \( -name '*.RSA' -o -name '*.EC' \) | head -n1)"
-          [ -n "$rsa" ] || { echo "::error::管理器 APK 里没有 v1 签名证书"; exit 1; }
-          openssl pkcs7 -inform DER -in "$rsa" -print_certs -out /tmp/abk_cert/cert.pem
-          openssl x509 -in /tmp/abk_cert/cert.pem -outform DER -out /tmp/abk_cert/cert.der
-          size="$(stat -c%s /tmp/abk_cert/cert.der)"
-          sha="$(openssl dgst -sha256 -r /tmp/abk_cert/cert.der | awk '{print $1}')"
-          echo "管理器签名证书: size=$size sha256=$sha"
-          echo "certSize=$size" >> "$GITHUB_OUTPUT"
-          echo "certSha=$sha" >> "$GITHUB_OUTPUT"
