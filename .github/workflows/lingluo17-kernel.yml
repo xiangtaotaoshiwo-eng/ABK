@@ -28,11 +28,11 @@ on:
         default: ''
         type: string
       optimize_level:
-        description: '优化等级'
+        description: '优化等级 (O2=默认, O3=激进)'
         required: false
         type: choice
-        default: '1'
-        options: ['0', '1', '2', '3']
+        default: 'O2'
+        options: ['O2', 'O3']
       clean:
         description: '干净构建(不用缓存)'
         required: false
